@@ -1,0 +1,148 @@
+#include "raylib.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+#define MAX_TOPPINGS 5
+#define MAX_BUDGET 15.0f
+
+typedef struct {
+    const char* name;
+    float price;
+    Color color;
+} Topping;
+
+typedef struct {
+    const char* name;
+    float basePrice;
+    Topping toppings[MAX_TOPPINGS];
+    int toppingCount;
+} Pizza;
+
+Topping availableToppings[] = {
+    {"Pepperoni", 2.0f, RED},
+    {"Cheese", 1.5f, YELLOW},
+    {"Olives", 1.0f, DARKGREEN},
+    {"Mushrooms", 1.2f, LIGHTGRAY},
+    {"Bacon", 2.5f, BROWN}
+};
+
+int totalOrders = 0;
+float totalRevenue = 0.0f;
+
+void DrawPizza(Pizza pizza, int x, int y, float totalPrice) {
+    DrawText(TextFormat("Pizza: %s", pizza.name), x, y, 20, DARKGRAY);
+    DrawText(TextFormat("Base price: $%.2f", pizza.basePrice), x, y + 30, 20, GRAY);
+    DrawText("Toppings:", x, y + 60, 20, DARKGRAY);
+    int offset = 90;
+    for (int i = 0; i < pizza.toppingCount; i++) {
+        DrawText(TextFormat("- %s ($%.2f)", pizza.toppings[i].name, pizza.toppings[i].price), x + 20, y + offset, 20, DARKGREEN);
+        offset += 30;
+    }
+    DrawText(TextFormat("Total price: $%.2f", totalPrice), x, y + offset, 20, RED);
+
+    DrawCircle(600, 200, 80, BEIGE);
+    for (int i = 0; i < pizza.toppingCount; i++) {
+        float angle = (2 * PI / MAX_TOPPINGS) * i;
+        int tx = 600 + (int)(50 * cosf(angle));
+        int ty = 200 + (int)(50 * sinf(angle));
+        DrawCircle(tx, ty, 10, pizza.toppings[i].color);
+    }
+}
+
+void ResetPizza(Pizza *pizza, float *totalPrice, bool toppingAdded[], bool *orderCompleted, bool *tooExpensive) {
+    pizza->toppingCount = 0;
+    *totalPrice = pizza->basePrice;
+    for (int i = 0; i < MAX_TOPPINGS; i++) toppingAdded[i] = false;
+    *orderCompleted = false;
+    *tooExpensive = false;
+}
+
+bool CanAddAnyTopping(float totalPrice, bool toppingAdded[]) {
+    for (int i = 0; i < MAX_TOPPINGS; i++) {
+        if (!toppingAdded[i] && (totalPrice + availableToppings[i].price <= MAX_BUDGET)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int main(void) {
+    const int screenWidth = 800;
+    const int screenHeight = 600;
+
+    InitWindow(screenWidth, screenHeight, "Pizzeria Simulator");
+    SetTargetFPS(60);
+
+    Pizza pizza = { .name = "Custom Pizza", .basePrice = 10.0f, .toppingCount = 0 };
+    float totalPrice = pizza.basePrice;
+    bool toppingAdded[MAX_TOPPINGS] = { false };
+    bool orderCompleted = false;
+    bool tooExpensive = false;
+
+    int frameCounter = 0;
+    int animationOffset = 0;
+
+    while (!WindowShouldClose()) {
+        frameCounter++;
+        animationOffset = (int)(sinf(frameCounter * 0.05f) * 10);
+
+        if (!orderCompleted) {
+            for (int i = 0; i < MAX_TOPPINGS; i++) {
+                if (IsKeyPressed(KEY_ONE + i) && !toppingAdded[i]) {
+                    float newPrice = totalPrice + availableToppings[i].price;
+                    if (newPrice <= MAX_BUDGET && pizza.toppingCount < MAX_TOPPINGS) {
+                        pizza.toppings[pizza.toppingCount++] = availableToppings[i];
+                        toppingAdded[i] = true;
+                        totalPrice = newPrice;
+                        tooExpensive = false;
+                    } else {
+                        tooExpensive = true;
+                    }
+                }
+            }
+
+            if (!CanAddAnyTopping(totalPrice, toppingAdded) || pizza.toppingCount == MAX_TOPPINGS) {
+                orderCompleted = true;
+                totalOrders++;
+                totalRevenue += totalPrice;
+            }
+        }
+
+        if (IsKeyPressed(KEY_R)) {
+            ResetPizza(&pizza, &totalPrice, toppingAdded, &orderCompleted, &tooExpensive);
+        }
+
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+
+        DrawText("Welcome to the Pizzeria Simulator!", 180, 20 + animationOffset, 20, MAROON);
+        DrawText("Press 1-5 to add toppings. Max budget: $15.00", 180, 50, 20, DARKGRAY);
+        DrawText("Press R to reset the pizza.", 180, 70, 20, DARKBLUE);
+
+        for (int i = 0; i < MAX_TOPPINGS; i++) {
+            DrawText(TextFormat("%d. %s ($%.2f)%s", i + 1, availableToppings[i].name, availableToppings[i].price,
+                                toppingAdded[i] ? " - Added" : ""), 100, 100 + i * 20, 18,
+                     toppingAdded[i] ? DARKGREEN : BLACK);
+        }
+
+        DrawPizza(pizza, 100, 250, totalPrice);
+
+        if (orderCompleted) {
+            DrawRectangle(140, 480, 520, 80, Fade(GREEN, 0.3f));
+            DrawText("Pizza complete! You collected a pizza!", 160, 500, 22, DARKGREEN);
+            DrawText("Press R to start a new order.", 220, 530, 20, DARKGRAY);
+        } else if (tooExpensive) {
+            DrawText("Cannot add this topping! Too expensive!", 180, 500, 20, RED);
+        }
+
+        DrawText(TextFormat("Total pizzas made: %d", totalOrders), 550, 400, 20, DARKBLUE);
+        DrawText(TextFormat("Total revenue: $%.2f", totalRevenue), 550, 430, 20, DARKBLUE);
+
+        EndDrawing();
+    }
+
+    CloseWindow();
+    return 0;
+}
